@@ -53,6 +53,8 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#native-installation">Native Installation</a><ul class="simple">
+<li class="toctree-l3"><a class="reference internal" href="#dependencies">Dependencies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installation">Dependencies</a></li>
 </ul>
 </li>
 </ul>
@@ -135,6 +137,16 @@ already included in the image), you would need to install it
 </section>
 <section id="native-installation">
 <span id="id2"></span><h2>Native Installation<a class="headerlink" href="#native-installation" title="Link to this heading"></a></h2>
+<section id="dependencies">
+  <h3>Dependencies and pre-requirements<a class="headerlink" href="#dependencies" title="Link to this heading"></a></h3>
+  <p>Before native installation process make sure that all of the dependencies satisfied.</p>
+  <ol>
+    <li><p>Use Bash as a shell.</p></li>
+    <li><p>Make sure that you have installed CUDA toolkit and it's located in <code>/usr/local/cuda*</code>. Install it from <a class="reference external" href="https://developer.nvidia.com/cuda-downloads">nvidia website</a> if you don't have CUDA toolkit.</p></li>
+    <li><p>Check that <code>nvidia-smi</code> CUDA version matches with <code>nvcc --version</code> CUDA version. Specify it explicitly at <code>/home/$USERNAME/.bashrc</code> in case of mismatch. </p></li>
+  </ol>
+</section>
+<h3>Installation process<a class="headerlink" href="#installation" title="Link to this heading"></a></h3>
 <p>Clone <a class="reference external" href="https://github.com/kokkos/pykokkos-base">pykokkos-base</a> and
 create a conda environment:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/kokkos/pykokkos-base.git
@@ -158,6 +170,7 @@ install its requirements:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>..
 git<span class="w"> </span>clone<span class="w"> </span>https://github.com/kokkos/pykokkos.git
 <span class="nb">cd</span><span class="w"> </span>pykokkos/
+conda install --solver=classic conda-forge::conda-libmamba-solver conda-forge::libmamba conda-forge::libmambapy conda-forge::libarchive
 conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>pybind11<span class="w"> </span>cupy<span class="w"> </span>patchelf
 pip<span class="w"> </span>install<span class="w"> </span>--user<span class="w"> </span>-e<span class="w"> </span>.
 </pre></div>
