@@ -227,7 +227,7 @@ class Tracer:
         Apply the specified fusion strategy to the given list of operations
 
         :param operations: the TracerOperations to be fused
-        :param strategy: the fusion strategy to follow ("trace", "naive")
+        :param strategy: the fusion strategy to follow ("trace", "naive", "horizontal")
         """
 
         if strategy == "trace":
@@ -235,6 +235,9 @@ class Tracer:
 
         if strategy == "naive":
             return self.fuse_naive(operations)
+
+        if strategy == "horizontal":
+            return self.fuse_horizontal(operations)
 
         raise RuntimeError(f"Unrecognized fusion strategy '{strategy}'")
 
@@ -407,6 +410,230 @@ class Tracer:
         fused_ops.reverse()
 
         return fused_ops
+
+    def fuse_horizontal(self, operations: List[TracerOperation]) -> List[TracerOperation]:
+        """
+        Fuse a list of operations horizontally: combine kernels that can
+        run in parallel (no data dependencies, can have different iteration spaces)
+
+        :param operations: the TracerOperations to be fused
+        :returns: the list of TracerOperations post fusion
+        """
+
+        if len(operations) == 0:
+            return []
+
+        if len(operations) == 1:
+            return operations
+
+        # Sort operations by op_id to maintain order
+        sorted_ops = sorted(operations, key=lambda op: op.op_id if op.op_id is not None else 0)
+
+        fused_ops: List[TracerOperation] = []
+        ops_to_fuse: List[TracerOperation] = []
+        ops_to_fuse_views: Set[ViewType] = set()
+        ops_to_fuse_dependencies: Set[DataDependency] = set()
+
+        for op in sorted_ops:
+            op_views: Set[ViewType] = self.get_operation_views(op)
+
+            # Skip reduce and scan operations for now (can be added later)
+            if op.operation in {"reduce", "scan"}:
+                # Fuse any pending operations first
+                if len(ops_to_fuse) > 0:
+                    fused_ops.append(self.fuse_operations_horizontal(ops_to_fuse))
+                    ops_to_fuse.clear()
+                    ops_to_fuse_views.clear()
+                    ops_to_fuse_dependencies.clear()
+
+                fused_ops.append(op)
+                continue
+
+            # Check if this operation can be fused horizontally with current ops
+            can_fuse = self.is_safe_to_fuse_horizontal(
+                ops_to_fuse,
+                ops_to_fuse_views,
+                ops_to_fuse_dependencies,
+                op,
+                op_views,
+                op.dependencies
+            )
+
+            if can_fuse and len(ops_to_fuse) > 0:
+                # Can fuse with existing operations
+                ops_to_fuse.append(op)
+                ops_to_fuse_views.update(op_views)
+                ops_to_fuse_dependencies.update(op.dependencies)
+            else:
+                # Cannot fuse - finalize current group and start new one
+                if len(ops_to_fuse) > 0:
+                    fused_ops.append(self.fuse_operations_horizontal(ops_to_fuse))
+                    ops_to_fuse.clear()
+                    ops_to_fuse_views.clear()
+                    ops_to_fuse_dependencies.clear()
+
+                # Start new fusion group
+                ops_to_fuse.append(op)
+                ops_to_fuse_views.update(op_views)
+                ops_to_fuse_dependencies.update(op.dependencies)
+
+        # Fuse anything left over
+        if len(ops_to_fuse) > 0:
+            fused_ops.append(self.fuse_operations_horizontal(ops_to_fuse))
+
+        return fused_ops
+
+    def is_safe_to_fuse_horizontal(
+        self,
+        current: List[TracerOperation],
+        current_views: Set[ViewType],
+        current_dependencies: Set[DataDependency],
+        next: TracerOperation,
+        next_views: Set[ViewType],
+        next_dependencies: Set[DataDependency]
+    ) -> bool:
+        """
+        Check whether the next operation is safe to fuse horizontally with the
+        current operations. Horizontal fusion allows different iteration spaces
+        but requires no data dependencies.
+
+        :param current: the current list of tracer operations
+        :param current_views: the combined set of views used by each operation to be fused
+        :param current_dependencies: the combined set of data dependencies
+        :param next: the next potential operation to be added
+        :param next_views: the set of views in the operation to be added
+        :param next_dependencies: the set of data dependencies of the next operation
+        :returns: whether the next operation can be added
+        """
+
+        # Check for data dependencies between operations
+        # For horizontal fusion, operations must be independent (no data dependencies)
+        # Check if next operation depends on any data written by current operations
+        
+        # First check Future dependencies
+        for next_dep in next_dependencies:
+            # Check if any current operation produces this dependency
+            for current_op in current:
+                # Check if current_op has a future that matches next_dep
+                if current_op.future is not None and id(current_op.future) == next_dep.data_id:
+                    # Next operation depends on current operation's future - cannot fuse
+                    return False
+        
+        # Check view dependencies
+        for current_op in current:
+            # Get views written by current_op
+            current_op_views = self.get_operation_views(current_op)
+            for view in current_op_views:
+                # Check if current_op writes to this view
+                writes_to_view = False
+                for dim in range(view.rank()):
+                    key = (id(view), dim)
+                    if key in current_op.access_indices:
+                        _, access_mode, _ = current_op.access_indices[key]
+                        if access_mode in {AccessMode.Write, AccessMode.ReadWrite}:
+                            writes_to_view = True
+                            break
+                if writes_to_view:
+                    # Check if next operation depends on this view
+                    if view in next_views:
+                        # Check if next operation reads from this view
+                        for dim in range(view.rank()):
+                            key = (id(view), dim)
+                            if key in next.access_indices:
+                                _, access_mode, _ = next.access_indices[key]
+                                if access_mode in {AccessMode.Read, AccessMode.ReadWrite}:
+                                    # Next operation reads what current writes - dependency exists
+                                    # For horizontal fusion, we want independent operations
+                                    return False
+
+        # Check for write conflicts on common views
+        # If both operations write to the same view, they cannot run in parallel
+        common_views = current_views.intersection(next_views)
+        next_safety_info = next.access_indices
+
+        for view in common_views:
+            # Get write access information for this view
+            view_written_in_current = False
+            view_written_in_next = False
+
+            # Check if current operations write to this view
+            for current_op in current:
+                current_views_op = self.get_operation_views(current_op)
+                if view in current_views_op:
+                    for dim in range(view.rank()):
+                        key = (id(view), dim)
+                        if key in current_op.access_indices:
+                            _, access_mode, _ = current_op.access_indices[key]
+                            if access_mode in {AccessMode.Write, AccessMode.ReadWrite}:
+                                view_written_in_current = True
+                                break
+                    if view_written_in_current:
+                        break
+
+            # Check if next operation writes to this view
+            for dim in range(view.rank()):
+                key = (id(view), dim)
+                if key in next_safety_info:
+                    _, access_mode, _ = next_safety_info[key]
+                    if access_mode in {AccessMode.Write, AccessMode.ReadWrite}:
+                        view_written_in_next = True
+                        break
+
+            # If both write to the same view, cannot fuse horizontally
+            if view_written_in_current and view_written_in_next:
+                return False
+
+        return True
+
+    def fuse_operations_horizontal(self, operations: List[TracerOperation]) -> TracerOperation:
+        """
+        Fuse a list of TracerOperations horizontally into one.
+        Unlike vertical fusion, these operations can have different policies.
+
+        :param operations: the TracerOperations to be fused
+        :returns: the fused operation
+        """
+
+        if len(operations) == 1:
+            return operations[0]
+
+        names: List[str] = []
+        workunits: List[Callable[..., None]] = []
+
+        # For horizontal fusion, we use the first operation's policy as a placeholder
+        # In practice, each operation will execute with its own policy
+        policy: ExecutionPolicy = operations[0].policy
+
+        # The last operation determines the type of the fused operation
+        operation: str = operations[-1].operation
+        future: Optional[Future] = operations[-1].future
+
+        parsers: List[Parser] = []
+        args: Dict[str, Dict[str, Any]] = {}
+        dependencies: Set[DataDependency] = set()
+        safety_info: Dict[Tuple[int, int], Tuple[AccessIndex, AccessMode, str]] = {}
+
+        for index, op in enumerate(operations):
+            names.append(op.name if op.name is not None else op.workunit.__name__)
+            workunits.append(op.workunit)
+            parsers.append(op.parser)
+            args[f"args_{index}"] = op.args
+            dependencies.update(op.dependencies)
+            safety_info = self.fuse_safety_info(safety_info, op.access_indices)
+
+        fused_name: str
+        if len(names) < 5:
+            fused_name = "_".join(names)
+        else:
+            # Avoid long names
+            fused_name = "_".join(names[:5]) + hashlib.md5(("".join(names)).encode()).hexdigest()
+
+        # For horizontal fusion, we store the list of policies in args
+        # This allows each operation to execute with its own policy
+        policies: List[ExecutionPolicy] = [op.policy for op in operations]
+        args["_horizontal_policies"] = policies
+
+        return TracerOperation(None, future, fused_name, policy, workunits, operation, parsers, fused_name, args, dependencies, safety_info)
 
     def fuse_safety_info(self, info_0: Dict[Tuple[int, int], Tuple[AccessIndex, AccessMode, str]], info_1: Dict[Tuple[int, int], Tuple[AccessIndex, AccessMode, str]]) -> Dict[Tuple[int, int], Tuple[AccessIndex, AccessMode, str]]:
         """

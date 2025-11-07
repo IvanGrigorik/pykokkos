@@ -153,6 +153,42 @@ class Runtime:
         return self.execute_workunit(name, policy, workunit, operation, parser, **kwargs)
 
 
+    def execute_workunit_fused(self, op: TracerOperation) -> Optional[Union[float, int]]:
+        """
+        Execute a fused workunit operation, handling both vertical and horizontal fusion
+
+        :param op: the TracerOperation to execute
+        :returns: the result of the operation
+        """
+
+        # Check if this is a horizontally fused operation
+        if isinstance(op.workunit, list) and "_horizontal_policies" in op.args:
+            # Horizontal fusion: execute each workunit with its own policy
+            policies: List[ExecutionPolicy] = op.args["_horizontal_policies"]
+            workunits: List[Callable[..., None]] = op.workunit
+            parsers: List[Parser] = op.parser if isinstance(op.parser, list) else [op.parser]
+            
+            results: List[Optional[Union[float, int]]] = []
+            
+            for i, (workunit, policy, parser) in enumerate(zip(workunits, policies, parsers)):
+                # Extract args for this workunit
+                workunit_args = op.args.get(f"args_{i}", {})
+                result = self.execute_workunit(
+                    op.name,
+                    policy,
+                    workunit,
+                    op.operation,
+                    parser,
+                    **workunit_args
+                )
+                results.append(result)
+            
+            # Return the last result (for reduce operations)
+            return results[-1] if results else None
+        else:
+            # Vertical fusion or single operation: execute normally
+            return self.execute_workunit(op.name, op.policy, op.workunit, op.operation, op.parser, **op.args)
+
     def execute_workunit(
         self,
         name: Optional[str],
@@ -215,7 +251,7 @@ class Runtime:
         operations = self.tracer.fuse(operations, self.fusion_strategy)
 
         for op in operations:
-            result = self.execute_workunit(op.name, op.policy, op.workunit, op.operation, op.parser, **op.args)
+            result = self.execute_workunit_fused(op)
             if op.future is not None:
                 op.future.value = result
 
@@ -231,7 +267,7 @@ class Runtime:
         operations: List[TracerOperation] = self.tracer.fuse(list(self.tracer.operations), self.fusion_strategy)
 
         for op in operations:
-            result = self.execute_workunit(op.name, op.policy, op.workunit, op.operation, op.parser, **op.args)
+            result = self.execute_workunit_fused(op)
             if op.future is not None:
                 op.future.value = result
 
