@@ -14,7 +14,7 @@ from pykokkos.core.parsers import Parser
 from pykokkos.core.translators import PyKokkosMembers
 from pykokkos.core.visitors import visitors_util
 from pykokkos.core.type_inference import (
-    UpdatedTypes, UpdatedDecorator, get_type_info, 
+    UpdatedTypes, UpdatedDecorator, get_type_info,
 )
 from pykokkos.interface import (
     DataType, ExecutionPolicy, ExecutionSpace, MemorySpace,
@@ -27,6 +27,7 @@ from .compiler import Compiler
 from .module_setup import EntityMetadata, get_metadata, ModuleSetup
 from .run_debug import run_workload_debug, run_workunit_debug
 
+delayed_kernels=1
 
 class Runtime:
     """
@@ -149,7 +150,6 @@ class Runtime:
             future = Future()
             self.tracer.log_operation(future, name, policy, workunit, operation, parser, metadata.name, **kwargs)
             return future
-
         return self.execute_workunit(name, policy, workunit, operation, parser, **kwargs)
 
 
@@ -215,7 +215,13 @@ class Runtime:
         operations = self.tracer.fuse(operations, self.fusion_strategy)
 
         for op in operations:
-            result = self.execute_workunit(op.name, op.policy, op.workunit, op.operation, op.parser, **op.args)
+            # Pass barrier metadata if using barrier fusion
+            kwargs = dict(op.args)
+            if op.use_barriers and op.barrier_levels is not None:
+                kwargs['use_barriers'] = True
+                kwargs['barrier_levels'] = op.barrier_levels
+
+            result = self.execute_workunit(op.name, op.policy, op.workunit, op.operation, op.parser, **kwargs)
             if op.future is not None:
                 op.future.value = result
 
@@ -231,7 +237,13 @@ class Runtime:
         operations: List[TracerOperation] = self.tracer.fuse(list(self.tracer.operations), self.fusion_strategy)
 
         for op in operations:
-            result = self.execute_workunit(op.name, op.policy, op.workunit, op.operation, op.parser, **op.args)
+            # Pass barrier metadata if using barrier fusion
+            kwargs = dict(op.args)
+            if op.use_barriers and op.barrier_levels is not None:
+                kwargs['use_barriers'] = True
+                kwargs['barrier_levels'] = op.barrier_levels
+
+            result = self.execute_workunit(op.name, op.policy, op.workunit, op.operation, op.parser, **kwargs)
             if op.future is not None:
                 op.future.value = result
 
@@ -335,7 +347,7 @@ class Runtime:
         :param space: the execution space
         :param policy: the execution policy of the operation
         :param operation: the name of the operation "for", "reduce", or "scan"
-        :param kwargs: the keyword arguments passed to a workunit
+        :param kwargs: the keyword arguments passed to a workunit (may include use_barriers)
         """
 
         args: Dict[str, Any] = {}
@@ -352,7 +364,8 @@ class Runtime:
             if policy is None:
                 raise RuntimeError("Execution policy is None")
 
-            args.update(self.get_policy_arguments(policy))
+            use_barriers = kwargs.get('use_barriers', False)
+            args.update(self.get_policy_arguments(policy, use_barriers))
             is_functor: bool = hasattr(entity, "__self__")
             if is_functor:
                 functor: object = entity.__self__
@@ -461,11 +474,12 @@ class Runtime:
 
         return args
 
-    def get_policy_arguments(self, policy: ExecutionPolicy) -> Dict[str, Any]:
+    def get_policy_arguments(self, policy: ExecutionPolicy, use_barriers: bool = False) -> Dict[str, Any]:
         """
         Get the arguments that are used for to hold the results for workloads
 
         :param policy: the execution policy of the operation
+        :param use_barriers: whether barrier fusion is being used (converts RangePolicy to TeamPolicy)
         :returns: a dictionary of argument name to value
         """
 
@@ -474,8 +488,15 @@ class Runtime:
         args["pk_exec_space_instance"] = policy.space.instance
 
         if isinstance(policy, RangePolicy):
-            args["pk_threads_begin"] = policy.begin
-            args["pk_threads_end"] = policy.end
+            if use_barriers:
+                # Convert RangePolicy to TeamPolicy for barrier fusion
+                # League size = number of threads, team size = 1
+                args["pk_league_size"] = policy.end - policy.begin
+                args["pk_team_size"] = -1  # AUTO
+                args["pk_vector_length"] = 1
+            else:
+                args["pk_threads_begin"] = policy.begin
+                args["pk_threads_end"] = policy.end
         elif isinstance(policy, TeamPolicy):
             args["pk_league_size"] = policy.league_size
             args["pk_team_size"] = policy.team_size
@@ -493,8 +514,8 @@ class Runtime:
 
         fields: Dict[str, Any] = {}
         for key, value in members.items():
-            if type(value) in (int, float, bool, np.int8, np.int16, 
-                               np.int32, np.int64, np.uint8, np.uint16, 
+            if type(value) in (int, float, bool, np.int8, np.int16,
+                               np.int32, np.int64, np.uint8, np.uint16,
                                np.uint32, np.uint64, np.float32, np.double, np.float64):
                 fields[key] = value
             if isinstance(value, Future):

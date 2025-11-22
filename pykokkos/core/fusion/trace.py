@@ -48,6 +48,11 @@ class TracerOperation:
     dependencies: Set[DataDependency]
     access_indices: Dict[Tuple[str, int], Tuple[AccessIndex, AccessMode, str]]
 
+    # Barrier fusion metadata
+    use_barriers: bool = False
+    barrier_levels: Optional[List[int]] = None
+    ops_by_level: Optional[Dict[int, List['TracerOperation']]] = None
+
     def __hash__(self) -> int:
         return self.op_id
 
@@ -227,7 +232,7 @@ class Tracer:
         Apply the specified fusion strategy to the given list of operations
 
         :param operations: the TracerOperations to be fused
-        :param strategy: the fusion strategy to follow ("trace", "naive")
+        :param strategy: the fusion strategy to follow ("trace", "naive", "horizontal", "barrier")
         """
 
         if strategy == "trace":
@@ -235,6 +240,12 @@ class Tracer:
 
         if strategy == "naive":
             return self.fuse_naive(operations)
+
+        if strategy == "horizontal":
+            return self.fuse_horizontal(operations)
+
+        if strategy == "barrier":
+            return self.fuse_barrier(operations)
 
         raise RuntimeError(f"Unrecognized fusion strategy '{strategy}'")
 
@@ -407,6 +418,280 @@ class Tracer:
         fused_ops.reverse()
 
         return fused_ops
+
+    def fuse_horizontal(self, operations: List[TracerOperation]) -> List[TracerOperation]:
+        """
+        Fuse operations horizontally: greedily combine independent parallel_for
+        operations that can run together
+
+        :param operations: the TracerOperations to be fused
+        :returns: the list of TracerOperations post fusion
+        """
+
+        if len(operations) == 0:
+            return []
+
+        if len(operations) == 1:
+            return operations
+
+        fused_ops: List[TracerOperation] = []
+        remaining_ops: List[TracerOperation] = list(operations)
+
+        while remaining_ops:
+            # Start a new fusion group with the first operation
+            current_group: List[TracerOperation] = [remaining_ops.pop(0)]
+            current_group_views: Set[ViewType] = self.get_operation_views(current_group[0])
+            fused_safety_info: Dict[Tuple[int, int], Tuple[AccessIndex, AccessMode, str]] = current_group[0].access_indices
+
+            # Get the range of the first operation (if it's a RangePolicy)
+            current_range: Optional[Tuple[int, int]] = None
+            if isinstance(current_group[0].policy, RangePolicy):
+                current_range = (current_group[0].policy.begin, current_group[0].policy.end)
+
+            # Try to add more operations to the current group
+            i = 0
+            while i < len(remaining_ops):
+                candidate = remaining_ops[i]
+                candidate_views = self.get_operation_views(candidate)
+                can_fuse = True
+
+                # Only fuse parallel_for operations with RangePolicy
+                if candidate.operation != "for" or not isinstance(candidate.policy, RangePolicy):
+                    can_fuse = False
+
+                # Check if ranges match
+                if can_fuse and current_range is not None:
+                    candidate_range = (candidate.policy.begin, candidate.policy.end)
+                    if candidate_range != current_range:
+                        can_fuse = False
+
+                # Check safety (data dependencies)
+                if can_fuse:
+                    if not self.is_safe_to_fuse(current_group, current_group_views, fused_safety_info, candidate, candidate_views):
+                        can_fuse = False
+
+                # Check if operations are independent (horizontal fusion condition)
+                if can_fuse:
+                    if not self.are_operations_independent(current_group, candidate, remaining_ops, i):
+                        can_fuse = False
+
+                if can_fuse:
+                    # Add to current group
+                    current_group.append(candidate)
+                    current_group_views.update(candidate_views)
+                    fused_safety_info = self.fuse_safety_info(fused_safety_info, candidate.access_indices)
+                    remaining_ops.pop(i)
+                else:
+                    i += 1
+
+            # Fuse the current group and add to results
+            if len(current_group) == 1:
+                fused_ops.append(current_group[0])
+            else:
+                fused_ops.append(self.fuse_operations(current_group, fused_safety_info))
+
+        return fused_ops
+
+    def are_operations_independent(self, group_ops: List[TracerOperation], candidate: TracerOperation, remaining_ops: List[TracerOperation], candidate_idx: int) -> bool:
+        """
+        Check if a candidate operation is independent from the operations in the group.
+        Operations are independent if they don't have data dependencies on each other.
+
+        :param group_ops: the current list of operations in the fusion group
+        :param candidate: the candidate operation to check
+        :param remaining_ops: the list of remaining operations not yet processed
+        :param candidate_idx: the index of the candidate in remaining_ops
+        :returns: True if the candidate is independent from the group
+        """
+
+        # For greedy horizontal fusion, we check if there's no data dependency
+        # between the candidate and any operation in the group
+
+        # Get the outputs (writes) of all operations in the group
+        group_writes: Set[DataDependency] = set()
+        for op in group_ops:
+            # Check which views this operation writes to
+            for arg_name, value in op.args.items():
+                if isinstance(value, ViewType):
+                    # Check the access mode for this view
+                    for (view_id, dim), (access_index, access_mode, index_str) in op.access_indices.items():
+                        if view_id == id(value) and access_mode in {AccessMode.Write, AccessMode.ReadWrite}:
+                            # This operation writes to this view
+                            version = self.data_version.get(id(value), 0)
+                            group_writes.add(DataDependency(arg_name, id(value), version))
+                            break
+
+        # Check if candidate reads from any of the group's writes
+        for dep in candidate.dependencies:
+            if dep in group_writes:
+                return False
+
+        # CRITICAL FIX: Check if candidate has unsatisfied dependencies
+        # (dependencies that will be produced by operations before it in remaining_ops)
+        for dep in candidate.dependencies:
+            # Check if this dependency is satisfied by an operation that comes before
+            # the candidate in remaining_ops (i.e., hasn't been executed yet)
+            for j in range(candidate_idx):
+                other_op = remaining_ops[j]
+                # Check if other_op writes to this dependency
+                for arg_name, value in other_op.args.items():
+                    if isinstance(value, ViewType):
+                        for (view_id, dim), (access_index, access_mode, index_str) in other_op.access_indices.items():
+                            if view_id == dep.data_id and access_mode in {AccessMode.Write, AccessMode.ReadWrite}:
+                                # The candidate depends on data produced by an operation
+                                # that comes before it and isn't in the fusion group yet
+                                return False
+
+        # Check if candidate writes to anything that the group reads or writes
+        candidate_writes: Set[int] = set()
+        for arg_name, value in candidate.args.items():
+            if isinstance(value, ViewType):
+                for (view_id, dim), (access_index, access_mode, index_str) in candidate.access_indices.items():
+                    if view_id == id(value) and access_mode in {AccessMode.Write, AccessMode.ReadWrite}:
+                        candidate_writes.add(id(value))
+                        break
+
+        # Check against group reads and writes
+        for op in group_ops:
+            for dep in op.dependencies:
+                if dep.data_id in candidate_writes:
+                    return False
+
+        return True
+
+    def fuse_barrier(self, operations: List[TracerOperation]) -> List[TracerOperation]:
+        """
+        Fuse all operations into a single kernel using barriers between dependency levels.
+        Uses TeamPolicy with team_barrier() to synchronize between levels.
+
+        :param operations: the TracerOperations to be fused
+        :returns: a single fused operation with barrier information
+        """
+
+        if len(operations) == 0:
+            return []
+
+        if len(operations) == 1:
+            return operations
+
+        # Filter: only fuse parallel_for with RangePolicy
+        fuseable_ops = []
+        non_fuseable_ops = []
+        for op in operations:
+            if op.operation == "for" and isinstance(op.policy, RangePolicy):
+                fuseable_ops.append(op)
+            else:
+                non_fuseable_ops.append(op)
+
+        if len(fuseable_ops) == 0:
+            return operations
+
+        # Check all have same range
+        first_range = (fuseable_ops[0].policy.begin, fuseable_ops[0].policy.end)
+        for op in fuseable_ops:
+            if (op.policy.begin, op.policy.end) != first_range:
+                # Different ranges - fall back to horizontal fusion
+                return self.fuse_horizontal(operations)
+
+        # Compute dependency levels for barrier insertion
+        levels = self.compute_dependency_levels(fuseable_ops)
+
+        # Group operations by level
+        ops_by_level: Dict[int, List[TracerOperation]] = {}
+        for op, level in zip(fuseable_ops, levels):
+            if level not in ops_by_level:
+                ops_by_level[level] = []
+            ops_by_level[level].append(op)
+
+        # Create a single fused operation with barrier metadata
+        fused_op = self.fuse_operations_with_barriers(fuseable_ops, ops_by_level, levels)
+
+        # Return fused op plus any non-fuseable ops
+        return non_fuseable_ops + [fused_op]
+
+    def compute_dependency_levels(self, operations: List[TracerOperation]) -> List[int]:
+        """
+        Compute the dependency level for each operation.
+        Operations at the same level can execute in parallel.
+        Higher levels depend on lower levels.
+
+        :param operations: the list of operations
+        :returns: list of dependency levels (0-indexed)
+        """
+
+        levels = [0] * len(operations)
+
+        for i, op in enumerate(operations):
+            max_dep_level = -1
+
+            # Check all dependencies of this operation
+            for dep in op.dependencies:
+                # Find which previous operation produces this dependency
+                for j in range(i):
+                    prev_op = operations[j]
+                    # Check if prev_op writes to this dependency
+                    for arg_name, value in prev_op.args.items():
+                        if isinstance(value, ViewType) and id(value) == dep.data_id:
+                            # Check if it writes
+                            for (view_id, dim), (access_index, access_mode, index_str) in prev_op.access_indices.items():
+                                if view_id == id(value) and access_mode in {AccessMode.Write, AccessMode.ReadWrite}:
+                                    # This op depends on prev_op, so must be at higher level
+                                    max_dep_level = max(max_dep_level, levels[j])
+                                    break
+
+            levels[i] = max_dep_level + 1
+
+        return levels
+
+    def fuse_operations_with_barriers(self, operations: List[TracerOperation], ops_by_level: Dict[int, List[TracerOperation]], levels: List[int]) -> TracerOperation:
+        """
+        Fuse operations into a single operation with barrier metadata.
+
+        :param operations: all operations to fuse
+        :param ops_by_level: operations grouped by dependency level
+        :param levels: dependency level for each operation
+        :returns: a single fused TracerOperation with barrier metadata
+        """
+
+        if len(operations) == 1:
+            return operations[0]
+
+        names: List[str] = []
+        policy: RangePolicy = operations[0].policy
+        workunits: List[Callable[..., None]] = []
+
+        operation: str = "for"  # Barrier fusion only for parallel_for
+        future: Optional[Future] = None
+
+        parsers: List[Parser] = []
+        args: Dict[str, Dict[str, Any]] = {}
+        dependencies: Set[DataDependency] = set()
+        safety_info: Dict[Tuple[str, int], Tuple[AccessIndex, AccessMode, str]] = {}
+
+        for index, op in enumerate(operations):
+            names.append(op.name if op.name is not None else op.workunit.__name__)
+            workunits.append(op.workunit)
+            parsers.append(op.parser)
+            args[f"args_{index}"] = op.args
+            dependencies.update(op.dependencies)
+            safety_info = self.fuse_safety_info(safety_info, op.access_indices)
+
+        import hashlib
+        fused_name: str
+        if len(names) < 5:
+            fused_name = "_".join(names)
+        else:
+            fused_name = "_".join(names[:5]) + hashlib.md5(("".join(names)).encode()).hexdigest()
+
+        # Create fused operation with barrier metadata
+        fused_op = TracerOperation(None, future, fused_name, policy, workunits, operation, parsers, fused_name, args, dependencies, safety_info)
+
+        # Store barrier metadata
+        fused_op.barrier_levels = levels
+        fused_op.ops_by_level = ops_by_level
+        fused_op.use_barriers = True
+
+        return fused_op
 
     def fuse_safety_info(self, info_0: Dict[Tuple[int, int], Tuple[AccessIndex, AccessMode, str]], info_1: Dict[Tuple[int, int], Tuple[AccessIndex, AccessMode, str]]) -> Dict[Tuple[int, int], Tuple[AccessIndex, AccessMode, str]]:
         """

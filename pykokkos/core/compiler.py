@@ -58,6 +58,7 @@ class Compiler:
 
         :param metadata: the metadata of the workunits to be fused
         :param fuse_ASTs: whether to do the actual fusion of the ASTs, which is expensive
+        :param kwargs: additional parameters like use_barriers and barrier_levels
         :returns: the fused entity and all the classtypes it uses
         """
 
@@ -100,6 +101,7 @@ class Compiler:
 
         fused_name: str = "_".join(names)
         if fuse_ASTs:
+            # Pass barrier metadata to fuse_workunits
             AST, source = fuse_workunits(fused_name, ASTs, sources, **kwargs)
         else:
             AST = None

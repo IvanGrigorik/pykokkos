@@ -159,6 +159,124 @@ def fuse_bodies(bodies: List[List[ast.stmt]], name_map: Dict[Tuple[str, int], st
     return fused_body
 
 
+def fuse_arguments_with_team(all_args: List[ast.arguments], **kwargs) -> Tuple[ast.arguments, Dict[Tuple[str, int], str]]:
+    """
+    Fuse the arguments of workunits for TeamPolicy barrier fusion.
+    First argument becomes 'team' instead of thread ID.
+
+    :param all_args: the list of arguments for each workunit
+    :returns: the fused arguments and name mapping
+    """
+    operation = kwargs.get("operation", "parallel_for")
+
+    fused_args = ast.arguments(
+        posonlyargs=[],
+        args=[],
+        kwonlyargs=[],
+        kw_defaults=[],
+        defaults=[]
+    )
+
+    # First argument is team member for TeamPolicy
+    # Create annotation for pk.TeamMember
+    team_annotation = ast.Attribute(
+        value=ast.Name(id='pk', ctx=ast.Load()),
+        attr='TeamMember',
+        ctx=ast.Load()
+    )
+    fused_args.args.append(ast.arg(arg="team", annotation=team_annotation))
+
+    # Track which views we've already added
+    added_views: Set[int] = set()
+    name_map: Dict[Tuple[str, int], str] = {}
+
+    for workunit_idx, args in enumerate(all_args):
+        # Skip the first argument (thread ID in original, team in fused)
+        for arg_idx, arg in enumerate(args.args[1:], 1):
+            arg_id = id(arg)
+            if "PK_FUSE_ARGS" in os.environ and arg_id in added_views:
+                continue
+
+            added_views.add(arg_id)
+            new_name = f"fused_{arg.arg}_{workunit_idx}"
+            new_arg = ast.arg(arg=new_name, annotation=arg.annotation)
+            fused_args.args.append(new_arg)
+            name_map[(arg.arg, workunit_idx)] = new_name
+
+    return fused_args, name_map
+
+
+def fuse_bodies_with_barriers(bodies: List[List[ast.stmt]], name_map: Dict[Tuple[str, int], str], barrier_levels: List[int]) -> List[ast.stmt]:
+    """
+    Fuse the bodies of workunits and insert team_barrier() calls between dependency levels.
+
+    :param bodies: the list of statements in each workunit's body
+    :param name_map: a map from the old variable names to the new ones
+    :param barrier_levels: dependency level for each workunit
+    :returns: the fused bodies with barriers
+    """
+
+    fused_body: List[ast.stmt] = []
+
+    # Add: i: int = team.league_rank() at the beginning
+    i_assignment = ast.AnnAssign(
+        target=ast.Name(id='i', ctx=ast.Store()),
+        annotation=ast.Name(id='int', ctx=ast.Load()),
+        value=ast.Call(
+            func=ast.Attribute(
+                value=ast.Name(id='team', ctx=ast.Load()),
+                attr='league_rank',
+                ctx=ast.Load()
+            ),
+            args=[],
+            keywords=[]
+        ),
+        simple=1
+    )
+    fused_body.append(i_assignment)
+
+    # Group operations by level
+    ops_by_level: Dict[int, List[Tuple[int, List[ast.stmt]]]] = {}
+    for idx, body in enumerate(bodies):
+        level = barrier_levels[idx]
+        if level not in ops_by_level:
+            ops_by_level[level] = []
+        ops_by_level[level].append((idx, body))
+
+    # Process each level, adding barriers between them
+    for level in sorted(ops_by_level.keys()):
+        # Add all operations at this level
+        for idx, body in ops_by_level[level]:
+            declarations = DeclarationsVisitor()
+            for statement in body:
+                declarations.visit(statement)
+
+            for declaration in declarations.declarations:
+                new_name: str = f"fused_{declaration}_{idx}"
+                name_map[(declaration, idx)] = new_name
+
+            renamer = VariableRenamer(name_map, idx)
+            fused_body += [renamer.visit(s) for s in body]
+
+        # Add barrier after this level (except for the last level)
+        if level < max(ops_by_level.keys()):
+            # Create AST for: team.team_barrier()
+            barrier_call = ast.Expr(
+                value=ast.Call(
+                    func=ast.Attribute(
+                        value=ast.Name(id='team', ctx=ast.Load()),
+                        attr='team_barrier',
+                        ctx=ast.Load()
+                    ),
+                    args=[],
+                    keywords=[]
+                )
+            )
+            fused_body.append(barrier_call)
+
+    return fused_body
+
+
 def fuse_decorators(decorators: List[Union[ast.Attribute, ast.Call]], name_map: Dict[Tuple[str, int], str]) -> List[ast.Call]:
     """
     Fuse the decorators of the workunits
@@ -180,15 +298,24 @@ def fuse_ASTs(ASTs: List[ast.FunctionDef], name: str, **kwargs) -> ast.FunctionD
 
     :param ASTs: the asts to be fused
     :param name: the name of the fused workunit
+    :param kwargs: additional arguments including barrier_levels and use_barriers
     :returns: the AST of the fused workunit
     """
 
     args: ast.arguments
     name_map: Dict[str, str]
-    args, name_map = fuse_arguments([AST.args for AST in ASTs], **kwargs)
 
-    # decorator: ast.Call = fuse_decorators([AST.decorator_list[0] for AST in ASTs], name_map)
-    body: List[ast.stmt] = fuse_bodies([AST.body for AST in ASTs], name_map)
+    # Check if we're doing barrier fusion
+    use_barriers = kwargs.get('use_barriers', False)
+    barrier_levels = kwargs.get('barrier_levels', None)
+
+    if use_barriers and barrier_levels:
+        # Use TeamMember for barrier fusion
+        args, name_map = fuse_arguments_with_team([AST.args for AST in ASTs], **kwargs)
+        body: List[ast.stmt] = fuse_bodies_with_barriers([AST.body for AST in ASTs], name_map, barrier_levels)
+    else:
+        args, name_map = fuse_arguments([AST.args for AST in ASTs], **kwargs)
+        body: List[ast.stmt] = fuse_bodies([AST.body for AST in ASTs], name_map)
 
     # return ast.FunctionDef(name=name, args=args, decorator_list=[decorator], body=body)
     return ast.FunctionDef(name=name, args=args, decorator_list=ASTs[0].decorator_list, body=body)
