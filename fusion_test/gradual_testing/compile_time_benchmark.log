@@ -1,0 +1,103 @@
+======================================================================
+COMPILATION TIME BENCHMARK
+======================================================================
+Comparing: Naive (Vertical) vs Barrier (True Horizontal)
+Note: Each test is compiled once per strategy
+
+Testing: test_01_simple_independent
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 19.13s
+  Strategy: barrier      Compile time: 19.24s
+
+Testing: test_02_three_independent
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 19.70s
+  Strategy: barrier      Compile time: 21.11s
+
+Testing: test_03_simple_chain
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 21.04s
+  Strategy: barrier      Compile time: 21.20s
+
+Testing: test_04_two_chains
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 20.93s
+  Strategy: barrier      Compile time: 21.02s
+
+Testing: test_05_three_level_chain
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 21.43s
+  Strategy: barrier      Compile time: 21.01s
+
+Testing: test_06_mixed_independent_dependent
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 20.48s
+  Strategy: barrier      Compile time: 20.79s
+
+Testing: test_07_fork_join
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 20.51s
+  Strategy: barrier      Compile time: 20.32s
+
+Testing: test_08_multiple_branches
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 20.18s
+  Strategy: barrier      Compile time: 20.28s
+
+Testing: test_09_complex_dag
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 23.61s
+  Strategy: barrier      Compile time: 20.50s
+
+Testing: test_10_maximum_complexity
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 17.66s
+  Strategy: barrier      Compile time: 20.87s
+
+Testing: test_11_different_ranges
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 65.55s
+  Strategy: barrier      Compile time: 55.63s
+
+Testing: test_12_separated_by_reduce
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 53.24s
+  Strategy: barrier      Compile time: 54.03s
+
+Testing: test_13_mixed_ranges_and_deps
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 70.84s
+  Strategy: barrier      Compile time: 54.18s
+
+Testing: test_14_complex_mixed
+----------------------------------------------------------------------
+  Strategy: naive        Compile time: 107.73s
+  Strategy: barrier      Compile time: 86.28s
+
+======================================================================
+SUMMARY
+======================================================================
+Test                           Naive (s)       Barrier (s)     Speedup        
+----------------------------------------------------------------------
+test_01_simple_independent            19.13          19.24     0.99x (naive faster)
+test_02_three_independent             19.70          21.11     0.93x (naive faster)
+test_03_simple_chain                  21.04          21.20     0.99x (naive faster)
+test_04_two_chains                    20.93          21.02     1.00x (naive faster)
+test_05_three_level_chain             21.43          21.01     1.02x (barrier faster)
+test_06_mixed_independent_dependent        20.48          20.79     0.99x (naive faster)
+test_07_fork_join                     20.51          20.32     1.01x (barrier faster)
+test_08_multiple_branches             20.18          20.28     1.00x (naive faster)
+test_09_complex_dag                   23.61          20.50     1.15x (barrier faster)
+test_10_maximum_complexity            17.66          20.87     0.85x (naive faster)
+test_11_different_ranges              65.55          55.63     1.18x (barrier faster)
+test_12_separated_by_reduce           53.24          54.03     0.99x (naive faster)
+test_13_mixed_ranges_and_deps         70.84          54.18     1.31x (barrier faster)
+test_14_complex_mixed                107.73          86.28     1.25x (barrier faster)
+
+----------------------------------------------------------------------
+Average Compilation Time:
+  Naive:   35.86s
+  Barrier: 32.60s
+  Average Speedup: 1.10x (barrier faster)
+
+Results saved to: /home/sifi/pykokkos-fuse/fusion_test/gradual_testing/compile_time_results.json

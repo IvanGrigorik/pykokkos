@@ -1,0 +1,51 @@
+Plot Variants Summary
+
+Generated 6 different visualization styles for fusion benchmark results:
+
+1. variant1_grouped_bars.png
+   - Grouped bar charts side-by-side
+   - Left: Runtime comparison
+   - Right: Kernel count comparison
+   - Easy to compare values across strategies
+   - Best for: Direct value comparison
+
+2. variant2_heatmap.png
+   - Heatmap showing kernel counts
+   - Color intensity represents kernel count
+   - Easy to spot patterns and differences
+   - Best for: Quick visual pattern recognition
+
+3. variant3_speedup.png
+   - Speedup normalized to Trace (baseline)
+   - Shows performance improvement
+   - Values above 1.0 = faster than baseline
+   - Best for: Performance improvement analysis
+
+4. variant4_line_errorbars.png
+   - Line plots with error bars (min/max range)
+   - Top: Runtime with error bars
+   - Bottom: Kernel count
+   - Shows variability in measurements
+   - Best for: Understanding measurement variance
+
+5. variant5_stacked_area.png
+   - Stacked area chart for kernel counts
+   - Shows cumulative kernel count
+   - Visual representation of total kernels
+   - Best for: Total resource usage visualization
+
+6. variant6_side_by_side.png
+   - Comprehensive 3-panel layout
+   - Top left: Runtime bars
+   - Top right: Kernel count bars
+   - Bottom: Speedup comparison
+   - Best for: Complete overview in one figure
+
+All variants use consistent color scheme:
+- Trace (No Fusion): Gray
+- Naive (Vertical): Blue
+- Horizontal: Green
+- Barrier (True Horizontal): Red
+
+
+

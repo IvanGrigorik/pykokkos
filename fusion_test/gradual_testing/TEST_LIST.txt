@@ -1,0 +1,22 @@
+Test List
+
+Basic Tests (1-10)
+
+1. test_01_simple_independent: Two independent kernels with no dependencies.
+2. test_02_three_independent: Three independent kernels with no dependencies.
+3. test_03_simple_chain: Two operations with dependency A -> B.
+test_04_two_chains: Two parallel dependency chains A->B and C->D.
+test_05_three_level_chain: Three-level dependency chain A -> B -> C.
+test_06_mixed_independent_dependent: Independent ops mixed with dependency chain.
+test_07_fork_join: Fork-join pattern with one source splitting into two branches.
+test_08_multiple_branches: Three independent branches with different depths.
+test_09_complex_dag: Complex DAG with multiple sources and sinks.
+test_10_maximum_complexity: Most complex dependency pattern, hardest to fuse.
+
+Advanced Tests (11-14)
+
+test_11_different_ranges: Independent operations with different iteration ranges.
+test_12_separated_by_reduce: Independent operations separated by reduce operation.
+test_13_mixed_ranges_and_deps: Mixed operations with different ranges and dependencies.
+test_14_complex_mixed: Complex scenario with ranges, dependencies, and barriers.
+

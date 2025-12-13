@@ -1,0 +1,366 @@
+{
+  "test_01_simple_independent": {
+    "trace": {
+      "success": true,
+      "time": 0.6525558495521545,
+      "min_time": 0.5732128620147705,
+      "max_time": 0.9827826023101807,
+      "std_dev": 0.06996281042527572,
+      "kernels": 2
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6423079919815063,
+      "min_time": 0.5719640254974365,
+      "max_time": 0.903099536895752,
+      "std_dev": 0.06198110716955389,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6519515514373779,
+      "min_time": 0.5751054286956787,
+      "max_time": 0.8604037761688232,
+      "std_dev": 0.060652811517892466,
+      "kernels": 1
+    }
+  },
+  "test_02_three_independent": {
+    "trace": {
+      "success": true,
+      "time": 0.6561767506599426,
+      "min_time": 0.576373815536499,
+      "max_time": 0.9707603454589844,
+      "std_dev": 0.06344742405938579,
+      "kernels": 3
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6258774089813233,
+      "min_time": 0.5679705142974854,
+      "max_time": 0.7554264068603516,
+      "std_dev": 0.03717239954684466,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6356012177467346,
+      "min_time": 0.5746238231658936,
+      "max_time": 0.7585408687591553,
+      "std_dev": 0.0383105460762971,
+      "kernels": 1
+    }
+  },
+  "test_03_simple_chain": {
+    "trace": {
+      "success": true,
+      "time": 0.6383272123336792,
+      "min_time": 0.5728485584259033,
+      "max_time": 0.7478227615356445,
+      "std_dev": 0.04026323053909926,
+      "kernels": 2
+    },
+    "naive": {
+      "success": true,
+      "time": 0.64043377161026,
+      "min_time": 0.5736284255981445,
+      "max_time": 0.8083310127258301,
+      "std_dev": 0.04627867469969364,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6308061742782592,
+      "min_time": 0.5676252841949463,
+      "max_time": 0.9386568069458008,
+      "std_dev": 0.058330049493122337,
+      "kernels": 1
+    }
+  },
+  "test_04_two_chains": {
+    "trace": {
+      "success": true,
+      "time": 0.6117539262771606,
+      "min_time": 0.5686366558074951,
+      "max_time": 0.813798189163208,
+      "std_dev": 0.0411320132992968,
+      "kernels": 4
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6688700222969055,
+      "min_time": 0.5757961273193359,
+      "max_time": 0.8054084777832031,
+      "std_dev": 0.051520447201104665,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6457973313331604,
+      "min_time": 0.573204755783081,
+      "max_time": 0.7994472980499268,
+      "std_dev": 0.052918473856197405,
+      "kernels": 1
+    }
+  },
+  "test_05_three_level_chain": {
+    "trace": {
+      "success": true,
+      "time": 0.6324992156028748,
+      "min_time": 0.5703957080841064,
+      "max_time": 0.7722957134246826,
+      "std_dev": 0.04297455713279407,
+      "kernels": 3
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6560853815078735,
+      "min_time": 0.57051682472229,
+      "max_time": 0.7815539836883545,
+      "std_dev": 0.049901416543043225,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.678523428440094,
+      "min_time": 0.5824573040008545,
+      "max_time": 0.9290392398834229,
+      "std_dev": 0.06380905633468849,
+      "kernels": 1
+    }
+  },
+  "test_06_mixed_independent_dependent": {
+    "trace": {
+      "success": true,
+      "time": 0.685833818912506,
+      "min_time": 0.5773298740386963,
+      "max_time": 0.845989465713501,
+      "std_dev": 0.06254534270009504,
+      "kernels": 4
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6944818305969238,
+      "min_time": 0.5860230922698975,
+      "max_time": 0.881821870803833,
+      "std_dev": 0.06398358204551781,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6202365756034851,
+      "min_time": 0.5673112869262695,
+      "max_time": 0.743239164352417,
+      "std_dev": 0.03774117067655377,
+      "kernels": 1
+    }
+  },
+  "test_07_fork_join": {
+    "trace": {
+      "success": true,
+      "time": 0.6632544422149658,
+      "min_time": 0.5737013816833496,
+      "max_time": 0.8916721343994141,
+      "std_dev": 0.07137442590270811,
+      "kernels": 4
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6195559620857238,
+      "min_time": 0.5671522617340088,
+      "max_time": 0.7359535694122314,
+      "std_dev": 0.029023081308270873,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6280214548110962,
+      "min_time": 0.573361873626709,
+      "max_time": 0.8680667877197266,
+      "std_dev": 0.052894714507022884,
+      "kernels": 1
+    }
+  },
+  "test_08_multiple_branches": {
+    "trace": {
+      "success": true,
+      "time": 0.6359239649772644,
+      "min_time": 0.5733871459960938,
+      "max_time": 0.7925174236297607,
+      "std_dev": 0.04617705461287538,
+      "kernels": 7
+    },
+    "naive": {
+      "success": true,
+      "time": 0.62289142370224,
+      "min_time": 0.5699598789215088,
+      "max_time": 0.7287225723266602,
+      "std_dev": 0.037057015509303126,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6232799506187439,
+      "min_time": 0.5723297595977783,
+      "max_time": 0.7173933982849121,
+      "std_dev": 0.03586042529129271,
+      "kernels": 1
+    }
+  },
+  "test_09_complex_dag": {
+    "trace": {
+      "success": true,
+      "time": 0.6094378733634949,
+      "min_time": 0.5711603164672852,
+      "max_time": 0.671978235244751,
+      "std_dev": 0.026177624892187897,
+      "kernels": 5
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6220935940742492,
+      "min_time": 0.5688726902008057,
+      "max_time": 0.7465555667877197,
+      "std_dev": 0.03743657038692966,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6385607886314392,
+      "min_time": 0.5677344799041748,
+      "max_time": 0.8695292472839355,
+      "std_dev": 0.051462472794621426,
+      "kernels": 1
+    }
+  },
+  "test_10_maximum_complexity": {
+    "trace": {
+      "success": true,
+      "time": 0.6246187686920166,
+      "min_time": 0.5713529586791992,
+      "max_time": 0.782707929611206,
+      "std_dev": 0.03930523713814845,
+      "kernels": 8
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6262663888931275,
+      "min_time": 0.57476806640625,
+      "max_time": 0.7351789474487305,
+      "std_dev": 0.041429731653174866,
+      "kernels": 1
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6404571223258972,
+      "min_time": 0.5705490112304688,
+      "max_time": 0.8482191562652588,
+      "std_dev": 0.0499155707569037,
+      "kernels": 1
+    }
+  },
+  "test_11_different_ranges": {
+    "trace": {
+      "success": true,
+      "time": 0.6125744843482971,
+      "min_time": 0.5738210678100586,
+      "max_time": 0.7377946376800537,
+      "std_dev": 0.033380863233332114,
+      "kernels": 3
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6227057528495789,
+      "min_time": 0.5735194683074951,
+      "max_time": 0.720026969909668,
+      "std_dev": 0.03579171089913714,
+      "kernels": 3
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6068604803085327,
+      "min_time": 0.5729224681854248,
+      "max_time": 0.6929292678833008,
+      "std_dev": 0.02928438793606642,
+      "kernels": 3
+    }
+  },
+  "test_12_separated_by_reduce": {
+    "trace": {
+      "success": true,
+      "time": 0.6253756332397461,
+      "min_time": 0.575474739074707,
+      "max_time": 0.7174563407897949,
+      "std_dev": 0.03770151524151277,
+      "kernels": 4
+    },
+    "naive": {
+      "success": true,
+      "time": 0.6151487851142883,
+      "min_time": 0.5721960067749023,
+      "max_time": 0.7450664043426514,
+      "std_dev": 0.03032384395659584,
+      "kernels": 3
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6094546151161194,
+      "min_time": 0.5732598304748535,
+      "max_time": 0.6735427379608154,
+      "std_dev": 0.02670098806329389,
+      "kernels": 3
+    }
+  },
+  "test_13_mixed_ranges_and_deps": {
+    "trace": {
+      "success": true,
+      "time": 0.6075871062278747,
+      "min_time": 0.576157808303833,
+      "max_time": 0.676276445388794,
+      "std_dev": 0.027100315310445273,
+      "kernels": 4
+    },
+    "naive": {
+      "success": true,
+      "time": 0.616408064365387,
+      "min_time": 0.5751299858093262,
+      "max_time": 0.6806786060333252,
+      "std_dev": 0.02756146451310336,
+      "kernels": 4
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6188886928558349,
+      "min_time": 0.5739326477050781,
+      "max_time": 0.6949539184570312,
+      "std_dev": 0.028587326040413377,
+      "kernels": 3
+    }
+  },
+  "test_14_complex_mixed": {
+    "trace": {
+      "success": true,
+      "time": 0.6316323399543762,
+      "min_time": 0.5839643478393555,
+      "max_time": 0.7204887866973877,
+      "std_dev": 0.030121849108777257,
+      "kernels": 6
+    },
+    "naive": {
+      "success": true,
+      "time": 0.637926185131073,
+      "min_time": 0.5839464664459229,
+      "max_time": 0.7707221508026123,
+      "std_dev": 0.0413288069019534,
+      "kernels": 6
+    },
+    "barrier": {
+      "success": true,
+      "time": 0.6424226808547974,
+      "min_time": 0.5841739177703857,
+      "max_time": 0.7714371681213379,
+      "std_dev": 0.0372817974107315,
+      "kernels": 5
+    }
+  }
+}

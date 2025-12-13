@@ -1,0 +1,142 @@
+{
+  "test_01_simple_independent": {
+    "naive": {
+      "success": true,
+      "compile_time": 19.132365226745605
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 19.23821520805359
+    }
+  },
+  "test_02_three_independent": {
+    "naive": {
+      "success": true,
+      "compile_time": 19.69786834716797
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 21.108339309692383
+    }
+  },
+  "test_03_simple_chain": {
+    "naive": {
+      "success": true,
+      "compile_time": 21.037845849990845
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 21.20071005821228
+    }
+  },
+  "test_04_two_chains": {
+    "naive": {
+      "success": true,
+      "compile_time": 20.926764965057373
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 21.01653790473938
+    }
+  },
+  "test_05_three_level_chain": {
+    "naive": {
+      "success": true,
+      "compile_time": 21.433969974517822
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 21.011531829833984
+    }
+  },
+  "test_06_mixed_independent_dependent": {
+    "naive": {
+      "success": true,
+      "compile_time": 20.481847763061523
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 20.785969495773315
+    }
+  },
+  "test_07_fork_join": {
+    "naive": {
+      "success": true,
+      "compile_time": 20.5087730884552
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 20.31651210784912
+    }
+  },
+  "test_08_multiple_branches": {
+    "naive": {
+      "success": true,
+      "compile_time": 20.181397438049316
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 20.279223203659058
+    }
+  },
+  "test_09_complex_dag": {
+    "naive": {
+      "success": true,
+      "compile_time": 23.605448484420776
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 20.500595092773438
+    }
+  },
+  "test_10_maximum_complexity": {
+    "naive": {
+      "success": true,
+      "compile_time": 17.661627054214478
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 20.866129159927368
+    }
+  },
+  "test_11_different_ranges": {
+    "naive": {
+      "success": true,
+      "compile_time": 65.54626154899597
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 55.63474082946777
+    }
+  },
+  "test_12_separated_by_reduce": {
+    "naive": {
+      "success": true,
+      "compile_time": 53.239078760147095
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 54.025983810424805
+    }
+  },
+  "test_13_mixed_ranges_and_deps": {
+    "naive": {
+      "success": true,
+      "compile_time": 70.83581495285034
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 54.17784142494202
+    }
+  },
+  "test_14_complex_mixed": {
+    "naive": {
+      "success": true,
+      "compile_time": 107.72704315185547
+    },
+    "barrier": {
+      "success": true,
+      "compile_time": 86.28088641166687
+    }
+  }
+}
